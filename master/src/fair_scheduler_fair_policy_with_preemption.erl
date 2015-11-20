@@ -36,8 +36,8 @@
 start_link() ->
     lager:info("Fair scheduler: Fair With Preemption policy"),
     case gen_server:start_link({local, sched_policy},
-                               fair_scheduler_fair_policy, [],
-                               disco:debug_flags("fair_scheduler_fair_policy"))
+                               fair_scheduler_fair_policy_with_preemption, [],
+                               disco:debug_flags("fair_scheduler_fair_policy_with_preemption"))
     of  {ok, _Server} = Ret -> Ret;
         {error, {already_started, Server}} -> {ok, Server}
     end.
@@ -144,13 +144,13 @@ preempt_n_workers(N, [W | R]) ->
                  (priv_get_jobs, from(), state()) -> gs_reply(job_map()).
 
 % Return current priorities for the ui
-handle_call(current_priorities, _, {_, PrioQ, _, _, _} = S) ->
+handle_call(current_priorities, _, {_, PrioQ, _, _} = S) ->
     {reply, {ok, [{N, Prio} || {Prio, _, N} <- PrioQ]}, S};
 
 handle_call(dbg_get_state, _, S) ->
     {reply, S, S};
 
-handle_call({next_job, _}, _, {{0, _}, _, _, _, _} = S) ->
+handle_call({next_job, _}, _, {{0, _}, _, _, _} = S) ->
     {reply, nojobs, S};
 
 % NotJobs lists all jobs that got 'none' reply from the
@@ -177,7 +177,7 @@ handle_call({next_job, NotJobs}, _, {Jobs, PrioQ, NC, PreemptionMap}) ->
                     {reply, {ok, Job#job.pid}, {Jobs, PrioQ, NC, NewPreemptionMap}}
             end
     end;
-handle_call(priv_get_jobs, _, {Jobs, _, _, _, _} = S) ->
+handle_call(priv_get_jobs, _, {Jobs, _, _, _} = S) ->
     {reply, {ok, Jobs}, S}.
 
 -spec handle_info({'DOWN', _, _, pid(), _}, state()) -> gs_noreply().
