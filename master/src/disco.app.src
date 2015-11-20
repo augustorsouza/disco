@@ -4,5 +4,5 @@
   {registered, [disco_server, event_server]},
   {applications, [kernel, stdlib]},
   {mod, {disco_main, []}},
-  {env, []},
+  {env, [{scheduler_opt, "fair_with_preemption"}]},
   {modules,[]}]}.
