@@ -1,7 +1,7 @@
 -module(fair_scheduler_job).
 -behaviour(gen_server).
 
--export([start/2, next_task/3, new_task/3, get_stats/2, update_nodes/2]).
+-export([start/2, next_task/3, new_task/3, get_stats/2, get_running_tasks/2, update_nodes/2]).
 -export([init/1, handle_call/3, handle_cast/2,
          handle_info/2, terminate/2, code_change/3]).
 
@@ -49,6 +49,10 @@ new_task(Job, Task, Load) ->
 -spec get_stats(pid(), timeout()) -> {ok, stats()}.
 get_stats(JobPid, Timeout) ->
     gen_server:call(JobPid, get_stats, Timeout).
+
+-spec get_running_tasks(pid(), timeout()) -> {ok, [pid()]}.
+get_running_tasks(JobPid, Timeout) ->
+    gen_server:call(JobPid, get_running_tasks, Timeout).
 
 % Internal API used across different job task schedulers.
 
@@ -156,6 +160,7 @@ handle_cast({die, Msg}, #state{job_name = JobName} = S) ->
 -type schedule_result() :: nolocal | nonodes | {run, host(), task()}.
 -spec handle_call(dbg_state_msg(), from(), state()) -> gs_reply(state());
                  (get_stats, from(), state()) -> gs_reply({ok, stats()});
+                 (get_running_tasks, from(), state()) -> gs_reply({ok, pid_map()});
                  ({get_empty_nodes, [host()]}, from(), state()) ->
                          gs_reply({ok, [host()]});
                  ({schedule_local|schedule_remote, [host()]}, from(), state()) ->
@@ -168,6 +173,10 @@ handle_call(dbg_get_state, _, S) ->
 handle_call(get_stats, _, #state{host_queue = HQ, running = Running} = S) ->
     NumTasks = lists:sum([N || {N, _, _} <- gb_trees:values(HQ)]),
     {reply, {ok, {NumTasks, gb_trees:size(Running)}}, S};
+
+% Job running tasks for the fair policy with preemption
+handle_call(get_running_tasks, _, #state{running = Running} = S) ->
+    {reply, {ok, Running}, S};
 
 % Return a subset of AvailableNodes that don't have any tasks assigned
 % to them by this job.

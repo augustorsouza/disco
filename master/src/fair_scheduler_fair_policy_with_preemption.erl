@@ -67,7 +67,7 @@ handle_cast({priv_update_priorities, Priorities}, {Jobs, _, NC, PreemptionMap}) 
     NewPrioQ = [{Prio, Pid, N} || #job{name = N, pid = Pid, prio = Prio}
                                       <- gb_trees:values(NewJobs)],
 
-    RawInitiatedJobs = [{Job, catch fair_scheduler_job:get_running_tasks(Job#job.pid, 100)} 
+    RawInitiatedJobs = [{Job, catch fair_scheduler_job:get_running_tasks(Job#job.pid, 100)}
                         || Job <- gb_trees:values(NewJobs)],
     InitiatedJobs = [{Job, gb_trees:size(X)} || {Job, {ok, X}} <- RawInitiatedJobs],
     JustSubmittedJobs = [ Job || {Job, N} <- InitiatedJobs, N == 0],
@@ -108,12 +108,12 @@ preempt_from_running_jobs([], _) ->
 preempt_from_running_jobs({0, _}, _) ->
     lager:info("preempt_running_jobs do nothing - empty tree"),
     0;
-    
+
 preempt_from_running_jobs(RunningJobs, NumCores) ->
     lager:info("preempt_running_jobs ~p ~p ", [RunningJobs, NumCores]),
     NumJobs = length(RunningJobs) + 1,
     Share = NumCores / lists:max([1, NumJobs]),
-    RawInitiatedJobs = [{Job, catch fair_scheduler_job:get_running_tasks(Job#job.pid, 100)} 
+    RawInitiatedJobs = [{Job, catch fair_scheduler_job:get_running_tasks(Job#job.pid, 100)}
                         || Job <- RunningJobs],
     InitiatedJobs = [{Job, X} || {Job, {ok, X}} <- RawInitiatedJobs],
     kill_n_tasks_from_jobs(Share, InitiatedJobs),
@@ -168,7 +168,7 @@ handle_call({next_job, NotJobs}, _, {Jobs, PrioQ, NC, PreemptionMap}) ->
                 0 ->
                     {UJobs, UPrioQ} = bias_priority(gb_trees:get(NextJob, Jobs),
                                                     RPrioQ, Jobs, NC),
-                    lager:info("next_job NextJob ~p | ~p", [NextJob, UPrioQ]),
+                    %lager:info("next_job NextJob ~p | ~p", [NextJob, UPrioQ]),
                     {reply, {ok, NextJob}, {UJobs, UPrioQ, NC, PreemptionMap}};
                 _ ->
                     [{Job, Share} | R] = PreemptionMap,
