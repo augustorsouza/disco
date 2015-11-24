@@ -72,7 +72,7 @@ handle_cast({priv_update_priorities, Priorities}, {Jobs, _, NC, PreemptionMap}) 
     InitiatedJobs = [{Job, gb_trees:size(X)} || {Job, {ok, X}} <- RawInitiatedJobs],
     JustSubmittedJobs = [ Job || {Job, N} <- InitiatedJobs, N == 0],
     RunningJobs = [ Job || {Job, N} <- InitiatedJobs, N =/= 0],
-    %lager:info("priv_update_priorities JustSubmittedJobs ~p", [JustSubmittedJobs]),
+    lager:info("priv_update_priorities JustSubmittedJobs ~p", [JustSubmittedJobs]),
     NewPreemptionMap = case length(JustSubmittedJobs) of
         0 -> PreemptionMap;
         _ ->
@@ -82,7 +82,7 @@ handle_cast({priv_update_priorities, Priorities}, {Jobs, _, NC, PreemptionMap}) 
                 _ -> PreemptionMap ++ [{Job, round(Share)} || Job <- JustSubmittedJobs]
             end
     end,
-    %lager:info("priv_update_priorities NewPreemptionMap ~p", [NewPreemptionMap]),
+    lager:info("priv_update_priorities NewPreemptionMap ~p", [NewPreemptionMap]),
     {noreply, {NewJobs, lists:keysort(1, NewPrioQ), NC, NewPreemptionMap}};
 
 % Cluster topology has changed. Inform the fairy about the new total
@@ -174,7 +174,9 @@ handle_call({next_job, NotJobs}, _, {Jobs, PrioQ, NC, PreemptionMap}) ->
                     [{Job, Share} | R] = PreemptionMap,
                     Ms = [{Job, Share - 1}] ++ R,
                     NewPreemptionMap = [{J, S} || {J, S} <- Ms, S > 0],
-                    {reply, {ok, Job#job.pid}, {Jobs, PrioQ, NC, NewPreemptionMap}}
+                    {UJobs, UPrioQ} = bias_priority(gb_trees:get(NextJob, Jobs),
+                                                    RPrioQ, Jobs, NC),
+                    {reply, {ok, Job#job.pid}, {UJobs, UPrioQ, NC, NewPreemptionMap}}
             end
     end;
 handle_call(priv_get_jobs, _, {Jobs, _, _, _} = S) ->
