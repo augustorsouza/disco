@@ -80,6 +80,9 @@ init([]) ->
             {ok, "fair_with_preemption"} -> 
                 lager:info("Scheduler uses fair policy with preemption"),
                 fair_scheduler_fair_policy_with_preemption:start_link();
+            {ok, "fifo_with_preemption"} ->
+                lager:info("Scheduler uses fifo policy with preemption"),
+                fair_scheduler_fifo_with_preemption:start_link();
             _ ->
                 lager:info("Scheduler uses fair policy"),
                 fair_scheduler_fair_policy:start_link()
