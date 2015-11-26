@@ -34,6 +34,7 @@ handle_cast({update_nodes, Nodes}, {Jobs, _}) ->
     {noreply, {Jobs, NewNumCores}};
 handle_cast({new_job, JobPid, JobName}, {Jobs, NumCores}) ->
     erlang:monitor(process, JobPid),
+    kill_n_tasks_from_jobs(NumCores / (length(Jobs) + 1), Jobs),
     {noreply, {[{JobPid, JobName} | Jobs], NumCores}}.
 
 
@@ -53,20 +54,25 @@ handle_call(dbg_get_state, _, State) ->
     {reply, State, State};
 
 handle_call({next_job, NotJobs}, _, {Jobs, NumCores} = State) ->
-    RawInitiatedJobs = [{JobPid, JobName, catch fair_scheduler_job:get_running_tasks(JobPid, 100)} || {JobPid, JobName} <- Jobs],
-    Share = ceiling(NumCores / lists:max([1, length(RawInitiatedJobs)])),
-    Candidates = [ {JobPid, JobName, gb_trees:size(T)} || {JobPid, JobName, {ok, T}} <- RawInitiatedJobs, gb_trees:size(T) < Share],
+    RawInitiatedJobs = [{JobPid, JobName, catch fair_scheduler_job:get_number_of_running_tasks(JobPid, 100)} || {JobPid, JobName} <- Jobs],
+    InitiatedJobs = [{JobPid, JobName, N} || {JobPid, JobName, {ok, N}} <- RawInitiatedJobs],
+    Share = NumCores / lists:max([1, length(InitiatedJobs)]),
+    Candidates = [ J || {_, _, N} = J <- InitiatedJobs, N < Share],
     SortedCandidates = lists:sort(fun({_, _, RunningA}, {_, _, RunningB}) -> RunningA < RunningB end, Candidates),
     {reply, dropwhile(SortedCandidates, Jobs, NotJobs), State}.
 
-ceiling(X) when X < 0 ->
-    trunc(X);
-ceiling(X) ->
-    T = trunc(X),
-    case X - T == 0 of
-        true -> T;
-        false -> T + 1
-    end.
+kill_n_tasks_from_jobs(N, Jobs) ->
+    lists:foreach(fun({JobPid, _}) ->
+                     {ok, X} = fair_scheduler_job:get_running_tasks(JobPid, 100),
+                     Workers = gb_trees:keys(X),
+                     lager:info("must kill ~p from ~p", [round(N / length(Jobs)), Workers]),
+                     preempt_n_workers(round(N / length(Jobs)), Workers)
+                  end, Jobs).
+
+preempt_n_workers(0, _Workers) -> do_nothing;
+preempt_n_workers(N, [W | R]) ->
+    exit(W, "Preempted"),
+    preempt_n_workers(N - 1, R).
 
 dropwhile([{JobPid, _, _} | T], Jobs, NotJobs) ->
     V = lists:member(JobPid, NotJobs),
