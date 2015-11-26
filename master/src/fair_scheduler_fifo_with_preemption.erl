@@ -79,12 +79,13 @@ dropwhile([{JobPid, _, _} | T], Jobs, NotJobs) ->
     if V    -> dropwhile(T, Jobs, NotJobs);
        true -> {ok, JobPid}
     end;
-dropwhile([], [{JobPid, _} | T], NotJobs) ->
-    V = lists:member(JobPid, NotJobs),
-    if V    -> dropwhile([], T, NotJobs);
-       true -> {ok, JobPid}
-    end;
-dropwhile([], [], _) -> nojobs.
+% dropwhile([], [{JobPid, _} | T], NotJobs) ->
+%     V = lists:member(JobPid, NotJobs),
+%     if V    -> dropwhile([], T, NotJobs);
+%        true -> {ok, JobPid}
+%     end;
+dropwhile([], _, _) -> nojobs.
+% dropwhile([], [], _) -> nojobs.
 
 -spec handle_info({'DOWN', _, _, pid(), _}, state()) -> gs_noreply().
 handle_info({'DOWN', _, _, JobPid, _}, {Jobs, NumCores}) ->
