@@ -105,9 +105,18 @@ dropwhile([], _, _) -> nojobs.
 
 -spec handle_info({'DOWN', _, _, pid(), _}, state()) -> gs_noreply().
 handle_info({'DOWN', _, _, JobPid, _}, {Jobs, NumCores, Q}) ->
+    % Remove the job done from jobs queue
     {value, {_, JobName} = E} = lists:keysearch(JobPid, 1, Jobs),
     fair_scheduler:job_done(JobName),
-    {noreply, {Jobs -- [E], NumCores, Q}}.
+
+    % Remove the job done from preemption queue if its there
+    L = queue:to_list(Q),
+    L2 = case lists:keysearch(JobPid, 1, L) of
+        {value, I} -> L -- [I];
+        false -> L
+    end,
+
+    {noreply, {Jobs -- [E], NumCores, queue:from_list(L2)}}.
 
 -spec terminate(term(), state()) -> ok.
 terminate(_Reason, _State) -> ok.
