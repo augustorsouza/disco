@@ -77,12 +77,19 @@ handle_call({next_job, NotJobs}, _, {Jobs, NumCores, Q} = State) ->
                    end
             end;
         {empty, _} ->
-            RawInitiatedJobs = [{JobPid, JobName, catch fair_scheduler_job:get_number_of_running_tasks(JobPid, 100)} || {JobPid, JobName} <- Jobs],
-            InitiatedJobs = [{JobPid, JobName, N} || {JobPid, JobName, {ok, N}} <- RawInitiatedJobs],
-            Share = NumCores / lists:max([1, length(InitiatedJobs)]),
-            Candidates = [ J || {_, _, N} = J <- InitiatedJobs, N < Share],
-            SortedCandidates = lists:sort(fun({_, _, RunningA}, {_, _, RunningB}) -> RunningA < RunningB end, Candidates),
-            {reply, dropwhile(SortedCandidates, Jobs, NotJobs), State}
+            RawInitiatedJobs = [{JobPid, JobName, catch fair_scheduler_job:get_stats(JobPid, 100)} || {JobPid, JobName} <- Jobs],
+            lager:info("~p", [RawInitiatedJobs]),
+            % Check if there is a job in a transitory phase, eg from map to map_shuffle or from map_shuffle to reduce
+            case lists:keyfind({ok,{0,0}}, 3, RawInitiatedJobs) of
+                false -> 
+                    InitiatedJobs = [{JobPid, JobName, N} || {JobPid, JobName, {ok, {_, N}}} <- RawInitiatedJobs],
+                    Share = NumCores / lists:max([1, length(InitiatedJobs)]),
+                    Candidates = [ J || {_, _, N} = J <- InitiatedJobs, N < Share],
+                    SortedCandidates = lists:sort(fun({_, _, RunningA}, {_, _, RunningB}) -> RunningA < RunningB end, Candidates),
+                    {reply, dropwhile(SortedCandidates, Jobs, NotJobs), State};
+                _ -> 
+                    {reply, nojobs, State}
+            end
     end.
 
 preempt_n_workers(0, _Workers) -> do_nothing;
@@ -95,13 +102,13 @@ dropwhile([{JobPid, _, _} | T], Jobs, NotJobs) ->
     if V    -> dropwhile(T, Jobs, NotJobs);
        true -> {ok, JobPid}
     end;
-% dropwhile([], [{JobPid, _} | T], NotJobs) ->
-%     V = lists:member(JobPid, NotJobs),
-%     if V    -> dropwhile([], T, NotJobs);
-%        true -> {ok, JobPid}
-%     end;
-dropwhile([], _, _) -> nojobs.
-% dropwhile([], [], _) -> nojobs.
+dropwhile([], [{JobPid, _} | T], NotJobs) ->
+    V = lists:member(JobPid, NotJobs),
+    if V    -> dropwhile([], T, NotJobs);
+       true -> {ok, JobPid}
+    end;
+% dropwhile([], _, _) -> nojobs.
+dropwhile([], [], _) -> nojobs.
 
 -spec handle_info({'DOWN', _, _, pid(), _}, state()) -> gs_noreply().
 handle_info({'DOWN', _, _, JobPid, _}, {Jobs, NumCores, Q}) ->
