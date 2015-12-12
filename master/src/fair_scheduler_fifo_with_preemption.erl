@@ -86,7 +86,7 @@ handle_call({next_job, NotJobs}, _, {Jobs, NumCores, Q} = State) ->
                     Share = NumCores / lists:max([1, length(InitiatedJobs)]),
                     Candidates = [ J || {_, _, N} = J <- InitiatedJobs, N < Share],
                     SortedCandidates = lists:sort(fun({_, _, RunningA}, {_, _, RunningB}) -> RunningA < RunningB end, Candidates),
-                    {reply, dropwhile(SortedCandidates, Jobs, NotJobs), State};
+                    {reply, dropwhile(SortedCandidates, [], NotJobs), State};
                 {_, _, 2, _} -> 
                     InitiatedJobs = [{JobPid, JobName, N} || {JobPid, JobName, {ok, {_, N}}} <- RawInitiatedJobs],
                     Share = NumCores / lists:max([1, length(InitiatedJobs)]),
@@ -115,7 +115,6 @@ dropwhile([], [{JobPid, _, _} | T], NotJobs) ->
     if V    -> dropwhile([], T, NotJobs);
        true -> {ok, JobPid}
     end;
-% dropwhile([], _, _) -> nojobs.
 dropwhile([], [], _) -> nojobs.
 
 -spec handle_info({'DOWN', _, _, pid(), _}, state()) -> gs_noreply().
