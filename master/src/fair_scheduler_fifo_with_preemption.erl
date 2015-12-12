@@ -78,24 +78,22 @@ handle_call({next_job, NotJobs}, _, {Jobs, NumCores, Q} = State) ->
             end;
         {empty, _} ->
             RawInitiatedJobs = [{JobPid, JobName, Stage, catch fair_scheduler_job:get_stats(JobPid, 100)} || {JobPid, JobName, Stage} <- Jobs],
-            lager:info("~p", [RawInitiatedJobs]),
             % Check if there is a job in a transitory phase, eg from map to map_shuffle or from map_shuffle to reduce
             case lists:keyfind({ok,{0,0}}, 4, RawInitiatedJobs) of
                 false ->
-                    InitiatedJobs = [{JobPid, JobName, N} || {JobPid, JobName, {ok, {_, N}}} <- RawInitiatedJobs],
+                    InitiatedJobs = [{JobPid, JobName, N} || {JobPid, JobName, _, {ok, {_, N}}} <- RawInitiatedJobs],
                     Share = NumCores / lists:max([1, length(InitiatedJobs)]),
                     Candidates = [ J || {_, _, N} = J <- InitiatedJobs, N < Share],
                     SortedCandidates = lists:sort(fun({_, _, RunningA}, {_, _, RunningB}) -> RunningA < RunningB end, Candidates),
                     {reply, dropwhile(SortedCandidates, [], NotJobs), State};
                 {_, _, 2, _} -> 
-                    InitiatedJobs = [{JobPid, JobName, N} || {JobPid, JobName, {ok, {_, N}}} <- RawInitiatedJobs],
+                    InitiatedJobs = [{JobPid, JobName, N} || {JobPid, JobName, _, {ok, {_, N}}} <- RawInitiatedJobs],
                     Share = NumCores / lists:max([1, length(InitiatedJobs)]),
                     Candidates = [ J || {_, _, N} = J <- InitiatedJobs, N < Share],
                     SortedCandidates = lists:sort(fun({_, _, RunningA}, {_, _, RunningB}) -> RunningA < RunningB end, Candidates),
                     {reply, dropwhile(SortedCandidates, Jobs, NotJobs), State};
                 {Pid, Name, Stage, _} -> 
                     NewJobs = [{Pid, Name, Stage + 1} | Jobs -- [{Pid, Name, Stage}]],
-                    lager:info("Evoluir stage ~p", [NewJobs]),
                     {reply, nojobs, {NewJobs, NumCores, Q}}
             end
     end.
