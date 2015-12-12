@@ -10,7 +10,7 @@
 -export([start_link/0, init/1, handle_call/3, handle_cast/2,
          handle_info/2, terminate/2, code_change/3]).
 
--type state() :: {[{pid(), jobname()}], cores(),  disco_queue({pid(), non_neg_integer()})}.
+-type state() :: {[{pid(), jobname(), non_neg_integer()}], cores(),  disco_queue({pid(), non_neg_integer()})}.
 
 -spec start_link() -> {ok, pid()}.
 start_link() ->
@@ -40,10 +40,10 @@ handle_cast({new_job, JobPid, JobName}, {Jobs, NumCores, Q}) ->
       0 -> Q;
       _ -> queue:in({JobPid, round(NTasks)}, Q)
     end,
-    {noreply, {[{JobPid, JobName} | Jobs], NumCores, NewQ}}.
+    {noreply, {[{JobPid, JobName, 0} | Jobs], NumCores, NewQ}}.
 
 kill_n_tasks_from_jobs(N, Jobs) ->
-    lists:foreach(fun({JobPid, _}) ->
+    lists:foreach(fun({JobPid, _, _}) ->
                      {ok, X} = fair_scheduler_job:get_running_tasks(JobPid, 100),
                      Workers = gb_trees:keys(X),
                      lager:info("must kill ~p from ~p", [round(N / length(Jobs)), Workers]),
@@ -55,7 +55,7 @@ kill_n_tasks_from_jobs(N, Jobs) ->
                  (dbg_state_msg(), from(), state()) -> gs_reply(state());
                  (next_job_msg(), from(), state()) -> gs_reply(next_job()).
 handle_call(current_priorities, _, {Jobs, _, _} = State) ->
-    RawInitiatedJobs = [{JobName, catch fair_scheduler_job:get_running_tasks(JobPid, 100)} || {JobPid, JobName} <- Jobs],
+    RawInitiatedJobs = [{JobName, catch fair_scheduler_job:get_running_tasks(JobPid, 100)} || {JobPid, JobName, _} <- Jobs],
     SortedJobs = lists:sort(fun({_, RunningA}, {_, RunningB}) -> RunningA < RunningB end, RawInitiatedJobs),
     {reply, {ok, case SortedJobs of
                      [{N, _}|R] -> [{N, -1.0}|[{M, 1.0} || {M, _} <- R]];
@@ -77,18 +77,26 @@ handle_call({next_job, NotJobs}, _, {Jobs, NumCores, Q} = State) ->
                    end
             end;
         {empty, _} ->
-            RawInitiatedJobs = [{JobPid, JobName, catch fair_scheduler_job:get_stats(JobPid, 100)} || {JobPid, JobName} <- Jobs],
+            RawInitiatedJobs = [{JobPid, JobName, Stage, catch fair_scheduler_job:get_stats(JobPid, 100)} || {JobPid, JobName, Stage} <- Jobs],
             lager:info("~p", [RawInitiatedJobs]),
             % Check if there is a job in a transitory phase, eg from map to map_shuffle or from map_shuffle to reduce
-            case lists:keyfind({ok,{0,0}}, 3, RawInitiatedJobs) of
-                false -> 
+            case lists:keyfind({ok,{0,0}}, 4, RawInitiatedJobs) of
+                false ->
                     InitiatedJobs = [{JobPid, JobName, N} || {JobPid, JobName, {ok, {_, N}}} <- RawInitiatedJobs],
                     Share = NumCores / lists:max([1, length(InitiatedJobs)]),
                     Candidates = [ J || {_, _, N} = J <- InitiatedJobs, N < Share],
                     SortedCandidates = lists:sort(fun({_, _, RunningA}, {_, _, RunningB}) -> RunningA < RunningB end, Candidates),
                     {reply, dropwhile(SortedCandidates, Jobs, NotJobs), State};
-                _ -> 
-                    {reply, nojobs, State}
+                {_, _, 2, _} -> 
+                    InitiatedJobs = [{JobPid, JobName, N} || {JobPid, JobName, {ok, {_, N}}} <- RawInitiatedJobs],
+                    Share = NumCores / lists:max([1, length(InitiatedJobs)]),
+                    Candidates = [ J || {_, _, N} = J <- InitiatedJobs, N < Share],
+                    SortedCandidates = lists:sort(fun({_, _, RunningA}, {_, _, RunningB}) -> RunningA < RunningB end, Candidates),
+                    {reply, dropwhile(SortedCandidates, Jobs, NotJobs), State};
+                {Pid, Name, Stage, _} -> 
+                    NewJobs = [{Pid, Name, Stage + 1} | Jobs -- [{Pid, Name, Stage}]],
+                    lager:info("Evoluir stage ~p", [NewJobs]),
+                    {reply, nojobs, {NewJobs, NumCores, Q}}
             end
     end.
 
@@ -102,7 +110,7 @@ dropwhile([{JobPid, _, _} | T], Jobs, NotJobs) ->
     if V    -> dropwhile(T, Jobs, NotJobs);
        true -> {ok, JobPid}
     end;
-dropwhile([], [{JobPid, _} | T], NotJobs) ->
+dropwhile([], [{JobPid, _, _} | T], NotJobs) ->
     V = lists:member(JobPid, NotJobs),
     if V    -> dropwhile([], T, NotJobs);
        true -> {ok, JobPid}
@@ -113,7 +121,7 @@ dropwhile([], [], _) -> nojobs.
 -spec handle_info({'DOWN', _, _, pid(), _}, state()) -> gs_noreply().
 handle_info({'DOWN', _, _, JobPid, _}, {Jobs, NumCores, Q}) ->
     % Remove the job done from jobs queue
-    {value, {_, JobName} = E} = lists:keysearch(JobPid, 1, Jobs),
+    {value, {_, JobName, _} = E} = lists:keysearch(JobPid, 1, Jobs),
     fair_scheduler:job_done(JobName),
 
     % Remove the job done from preemption queue if its there
