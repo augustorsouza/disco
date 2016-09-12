@@ -1,0 +1,169 @@
+<!--
+@license
+Copyright (c) 2016 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+
+<link rel="import" href="../bower_components/polymer/polymer.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-input/paper-input.html">
+<link rel="import" href="../bower_components/paper-fab/paper-fab.html">
+<link rel="import" href="../bower_components/juicy-ace-editor/juicy-ace-editor.html">
+<link rel="import" href="../bower_components/iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="../bower_components/iron-ajax/iron-ajax.html">
+<link rel="import" href="../bower_components/iron-icons/iron-icons.html">
+
+<dom-module id="new-notebook">
+
+  <template>
+
+    <style is="custom-style">
+      :host {
+        display: block;
+        padding: 16px;
+        margin: 24px;
+      }
+      .flex-vertical {
+        @apply(--layout-vertical);
+        height: 200px;
+      }
+      .flex-end-justified {
+        @apply(--layout-horizontal);
+        @apply(--layout-end-justified);
+      }
+      .flex-horizontal {
+        @apply(--layout-horizontal);
+      }
+      .flexchild {
+        @apply(--layout-flex);
+      }
+      .card {
+        box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12), 0 3px 1px -2px rgba(0, 0, 0, 0.2);
+        padding: 16px;
+        margin: 24px;
+        border-radius: 5px;
+        background-color: #fff;
+        color: #757575;
+      }
+      .childcard {
+        padding: 10px;
+        margin: 12px;
+        border-radius: 5px;
+      }
+      paper-fab.green {
+        --paper-fab-background: var(--paper-green-500);
+        --paper-fab-keyboard-focus-background: var(--paper-green-500);
+      }
+      juicy-ace-editor {
+        padding: 10px;
+        margin: 12px;
+        height: 300px;
+      }
+    </style>
+
+    <div class="container flex-vertical">
+
+      <div>
+        <div class="card container flex-horizontal">
+          <paper-input label="Notebook name" class="childcard flexchild"></paper-input>
+          <paper-input label="Interval" class="childcard"></paper-input>
+          <paper-input label="Number of runs" class="childcard"></paper-input>
+        </div>
+      </div>
+
+      <div class="flexchild">
+        <div class="card">
+          <p>Job A</p>
+          <div class="flex-horizontal">
+            <div class="flexchild">
+              <p>Map</p>
+              <juicy-ace-editor wrapmode softtabs
+                                theme="ace/theme/monokai"
+                                mode="ace/mode/python">{{pythonCode}}</juicy-ace-editor>
+            </div>
+            <div class="flexchild">
+              <p>Reduce</p>
+              <juicy-ace-editor wrapmode softtabs
+                                theme="ace/theme/monokai"
+                                mode="ace/mode/python">{{pythonCode}}</juicy-ace-editor>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <p>Job B</p>
+          <div class="flex-horizontal">
+            <div class="flexchild">
+              <p>Map</p>
+              <juicy-ace-editor wrapmode softtabs
+                                theme="ace/theme/monokai"
+                                mode="ace/mode/python">{{pythonCode}}</juicy-ace-editor>
+            </div>
+            <div class="flexchild">
+              <p>Reduce</p>
+              <juicy-ace-editor wrapmode softtabs
+                                theme="ace/theme/monokai"
+                                mode="ace/mode/python">{{pythonCode}}</juicy-ace-editor>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="card-actions flex-end-justified">
+        <paper-fab class="green" icon="add" on-click="sendPythonCode"></paper-fab>
+      </div>
+
+    </div>
+    
+    <iron-ajax id="ajax"
+               url="http://localhost:8989/disco/code"
+               method="POST"
+               content-type="application/json"
+               handle-as="json"
+               on-response="codeSentResponse"></iron-ajax>
+
+  </template>
+
+  <script>
+
+    Polymer({
+      is: 'new-notebook',
+      properties: {
+        pythonCode: {
+          type: String,
+          value:
+`from disco.core import Job, result_iterator
+
+def map(line, params):
+    for word in line.split():
+        yield word, 1
+
+def reduce(iter, params):
+    from disco.util import kvgroup
+    for word, counts in kvgroup(sorted(iter)):
+        yield word, sum(counts)
+
+if __name__ == '__main__':
+    job = Job().run(input=["http://discoproject.org/media/text/chekhov.txt"],
+                    map=map,
+                    reduce=reduce)
+    for word, count in result_iterator(job.wait(show=True)):
+        print(word, count)`
+        }
+      },
+      sendPythonCode: function(e) {
+        this.$.ajax.body = JSON.stringify({"code": this.pythonCode});
+        this.$.ajax.generateRequest();
+      },
+      codeSentResponse: function(e) {
+        alert(e.detail.response);
+      }
+    });
+
+  </script>
+
+</dom-module>

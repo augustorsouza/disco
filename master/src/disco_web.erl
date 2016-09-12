@@ -7,6 +7,14 @@
 -include("config.hrl").
 
 -spec op(atom(), string(), module()) -> _.
+op('POST', "/disco/code", Req) ->
+    reply({ok, list_to_binary("Sucesso meu jovem!")}, Req),
+    Json = mochijson2:decode(Req:recv_body(?MAX_JSON_POST)),
+    {_, [{_, PythonCode}]} = Json,
+    SystemCommand = string:join(["python - <<EOF", binary_to_list(PythonCode), "EOF"], "\n"),
+    Result = os:cmd(SystemCommand),
+    lager:info("~p", [Result]);
+
 op('GET', "/disco/version", Req) ->
     {ok, Vsn} = application:get_key(vsn),
     reply({ok, list_to_binary(Vsn)}, Req);

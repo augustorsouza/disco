@@ -1,0 +1,8 @@
+{
+  "entrypoint": "index.html",
+  "shell": "src/disco-notebook.html",
+  "fragments": [
+    "src/applications.html",
+    "src/applications-reports.html"
+  ]
+}
