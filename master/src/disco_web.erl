@@ -8,12 +8,28 @@
 
 -spec op(atom(), string(), module()) -> _.
 op('POST', "/disco/code", Req) ->
-    reply({ok, list_to_binary("Sucesso meu jovem!")}, Req),
+    reply({ok, list_to_binary("Notebook submitted to Disco.")}, Req),
     Json = mochijson2:decode(Req:recv_body(?MAX_JSON_POST)),
-    {_, [{_, PythonCode}]} = Json,
-    SystemCommand = string:join(["python - <<EOF", binary_to_list(PythonCode), "EOF"], "\n"),
-    Result = os:cmd(SystemCommand),
-    lager:info("~p", [Result]);
+    {_, [{_, PythonCode}, {_, NotebookName}]} = Json,
+    PythonHereDoc = string:join(["python - <<EOF >", "./master/www/notebooks/logs/" ++ binary_to_list(NotebookName)], " "),
+    SystemCommand = string:join([PythonHereDoc, binary_to_list(PythonCode), "EOF"], "\n"),
+    os:cmd(SystemCommand);
+
+op('GET', "/disco/code/ls", Req) ->
+    Ls = os:cmd("ls ./master/www/notebooks/logs/"),
+    reply({ok, list_to_binary(re:replace(Ls, "\n", ", ", [global, {return, list}]))}, Req);
+
+op('GET', "/disco/code/" ++ LogFileName, Req) ->
+    {ok, Data} = file:read_file("./master/www/notebooks/logs/" ++ LogFileName),
+    [{"page", PageStr}] = Req:parse_qs(),
+    {Page, _} = string:to_integer(PageStr),
+    PerPage = 100,
+    Offset = PerPage * (Page - 1) + 1,
+    DataStr = binary_to_list(Data),
+    Tokens = string:tokens(DataStr, "\n"),
+    Sublist = lists:sublist(Tokens, Offset, PerPage),
+    IsLastPage = Offset + PerPage >= length(Tokens),
+    reply({ok, [{contents, list_to_binary(Sublist)}, {isLastPage, IsLastPage}]}, Req);
 
 op('GET', "/disco/version", Req) ->
     {ok, Vsn} = application:get_key(vsn),

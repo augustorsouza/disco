@@ -67,7 +67,7 @@
         <app-toolbar>Menu</app-toolbar>
         <iron-selector selected="[[page]]" attr-for-selected="name" class="drawer-list" role="navigation">
           <a name="new-notebook" href="/notebooks/new-notebook">New Notebook</a>
-          <a name="applications-reports" href="/notebooks/applications-reports">Reports</a>
+          <a name="notebooks-reports" href="/notebooks/notebooks-reports">Reports</a>
         </iron-selector>
       </app-drawer>
 
@@ -77,13 +77,13 @@
         <app-header condenses reveals effects="waterfall">
           <app-toolbar>
             <paper-icon-button icon="menu" drawer-toggle></paper-icon-button>
-            <div title>New Notebook</div>
+            <div title>Disco Notebooks</div>
           </app-toolbar>
         </app-header>
 
         <iron-pages role="main" selected="[[page]]" attr-for-selected="name">
           <new-notebook name="new-notebook"></new-notebook>
-          <applications-reports name="applications-reports"></applications-reports>
+          <notebooks-reports name="notebooks-reports"></notebooks-reports>
         </iron-pages>
 
       </app-header-layout>

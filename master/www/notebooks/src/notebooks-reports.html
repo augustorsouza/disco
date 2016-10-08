@@ -1,0 +1,138 @@
+<link rel="import" href="../bower_components/polymer/polymer.html">
+<link rel="import" href="../bower_components/iron-ajax/iron-ajax.html">
+<link rel="import" href="../bower_components/vaadin-grid/vaadin-grid.html">
+<link rel="import" href="../bower_components/paper-dialog/paper-dialog.html">
+<link rel="import" href="../bower_components/paper-dialog-scrollable/paper-dialog-scrollable.html">
+
+<dom-module id="notebooks-reports">
+
+  <template>
+
+    <style>
+      :host {
+        display: block;
+        padding: 10px;
+      }
+      .card {
+        box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12), 0 3px 1px -2px rgba(0, 0, 0, 0.2);
+        padding: 16px;
+        margin: 24px;
+        border-radius: 5px;
+        background-color: #fff;
+        color: #757575;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 16px 0;
+        color: #212121;
+      }
+      #dialog {
+        height: 100vh;
+        margin-bottom: 10vh;
+      }
+      #dialog-scrollable {
+        height: 80vh;
+        margin-bottom: 10vh;
+      }
+      #dialog-scrollable p {
+        margin-bottom: 10vh;
+      }
+    </style>
+
+    <div id="content">
+      <paper-dialog id="dialog" horizontal-align="left" vertical-align="top">
+        <h2>Reports for [[selectedFileName]]</h2>
+        <paper-dialog-scrollable id="dialog-scrollable">
+          <p>
+            [[dialogContent]]
+          </p>
+        </paper-dialog-scrollable>
+      </paper-dialog>
+
+      <div class="card">
+        <vaadin-grid id="grid" on-selected-items-changed="gridSelectedItemsChanged">
+          <table>
+            <colgroup>
+              <col name="fileName"/>
+            </colgroup>
+          </table>
+        </vaadin-grid>
+      </div>
+
+      <iron-ajax id="lsAjax"
+                 method="GET"
+                 content-type="text/plain"
+                 handle-as="text"
+                 on-response="receivedLsResponse"
+                 auto></iron-ajax>
+       <iron-ajax id="fileContentsAjax"
+                  method="GET"
+                  content-type="text/plain"
+                  handle-as="text"
+                  on-response="receivedFileContentResponse" auto></iron-ajax>
+    </div>
+  </template>
+
+  <script>
+
+    Polymer({
+      is: 'notebooks-reports',
+      properties: {
+        dialogContent: {
+          type: String
+        },
+        fileContentsPage: {
+          type: Number
+        },
+        selectedFileName: {
+          type: String
+        }
+      },
+      ready: function() {
+        this.$.lsAjax.url = window.location.origin + "/disco/code/ls";
+      },
+      receivedLsResponse: function(e) {
+        var response = e.detail.response.replace(/\"/g, "");
+        var fileNames = response.split(", ");
+        fileNames.pop();
+        var files = [];
+        for (var i = 0; i < fileNames.length; i++) {
+          var fileName = fileNames[i];
+          files.push({ "fileName": fileName });
+        }
+        var grid = this.$.grid;
+        grid.items = files;
+      },
+      receivedFileContentResponse: function(e) {
+        var json = JSON.parse(e.detail.response);
+        var contents = json.contents;
+        var isLastPage = json.isLastPage;
+
+        this.dialogContent = this.dialogContent + contents;
+        this.fileContentsPage = this.fileContentsPage + 1;
+
+        if (!isLastPage) {
+          this.$.fileContentsAjax.url = window.location.origin + "/disco/code/" + this.selectedFileName + "?page=" + this.fileContentsPage;
+        } else {
+          this.openDialog();
+          this.$.grid.selection.clear();
+        }
+      },
+      openDialog: function(e) {
+        this.$.dialog.positionTarget = this.$.content;
+        this.$.dialog.open();
+      },
+      gridSelectedItemsChanged: function(e) {
+        var selectedFileIndex = this.$.grid.selection.selected()[0];
+        if (selectedFileIndex != undefined) {
+          this.selectedFileName = this.$.grid.items[selectedFileIndex].fileName;
+          this.fileContentsPage = 1;
+          this.dialogContent = "";
+          this.$.fileContentsAjax.url = window.location.origin + "/disco/code/" + this.selectedFileName + "?page=" + this.fileContentsPage;
+        }
+      }
+    });
+
+  </script>
+
+</dom-module>

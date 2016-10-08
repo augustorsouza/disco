@@ -120,7 +120,6 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
     </div>
 
     <iron-ajax id="ajax"
-               url="http://localhost:8989/disco/code"
                method="POST"
                content-type="application/json"
                handle-as="json"
@@ -169,38 +168,39 @@ subject to an additional IP rights grant found at http://polymer.github.io/PATEN
         },
         pythonCode: {
           type: String,
-          computed: 'computePythonCode(mapA, reduceA, mapB, reduceB)'
+          computed: 'computePythonCode(mapA, reduceA, mapB, reduceB, interval, numberOfRuns)'
         }
       },
-      computePythonCode: function(mapA, reduceA, mapB, reduceB) {
+      computePythonCode: function(mapA, reduceA, mapB, reduceB, interval, numberOfRuns) {
 return `from disco.core import Job, result_iterator
 import time
 import itertools
 import threading
 
-NUMBER_OF_SUBMISSIONS = 1
-SECONDS_BEFORE_SUBMITTING_B = 5
+SECONDS_BEFORE_SUBMITTING_B = ` + interval + `
+NUMBER_OF_SUBMISSIONS = ` + numberOfRuns + `
+NUMBER_OF_MAPPERS = 16
 URL = "http://discoproject.org/media/text/chekhov.txt"
 
 ` + mapA +
 
 `
 
-` + mapB + 
+` + mapB +
 
 `
 
-` + reduceA + 
+` + reduceA +
 
-` 
+`
 
-` + reduceB + 
+` + reduceB +
 
 `
 
 def map_reader(fd, size, url, params):
     reader = fd.read()
-    splits = reader.split('\n')
+    splits = reader.split('\\n')
     total = len(splits)
     control = [False] * 10
     for index, row in enumerate(splits):
@@ -226,9 +226,9 @@ class Monitor(threading.Thread):
                     # the 3rd element in pipeline[1] (map stage) entry is the number of running map_shufflers
                     # the 3rd element in pipeline[2] (map stage) entry is the number of running reducers
                     if len(job_data["pipeline"]) > 0:
-                        print str(datetime.now().time()), " ", job_name, " ", job_data["pipeline"][0][3] + job_data["pipeline"][1][3] + job_data["pipeline"][2][3]
-                    else: 
-                        print str(datetime.now().time()), " ", job_name, " ", 0
+                        print(str(datetime.now().time()), " ", job_name, " ", job_data["pipeline"][0][3] + job_data["pipeline"][1][3] + job_data["pipeline"][2][3])
+                    else:
+                        print(str(datetime.now().time()), " ", job_name, " ", 0)
                 time.sleep(1)
 
 if __name__ == '__main__':
@@ -243,25 +243,25 @@ if __name__ == '__main__':
     monitor.start()
 
     for _ in itertools.repeat(None, NUMBER_OF_SUBMISSIONS):
-        jobA = Job("JobA").run(input=[URL] * 7,
+        jobA = Job("JobA").run(input=[URL] * NUMBER_OF_MAPPERS,
                         map=mapA,
                         reduce=reduceA,
                         map_reader=map_reader)
         time.sleep(SECONDS_BEFORE_SUBMITTING_B)
-        jobB = Job("JobB").run(input=[URL] * 25,
+        jobB = Job("JobB").run(input=[URL] * NUMBER_OF_MAPPERS,
                         map=mapB,
                         reduce=reduceB,
                         map_reader=map_reader)
         jobB.wait()
         jobA.wait()
 
-    # sent an event to the monitor to tell it must stop now
+    # send an event to the monitor to tell it must stop now
     event.set()`
       },
       sendPythonCode: function(e) {
-        // this.$.ajax.body = JSON.stringify({"code": this.pythonCode});
-        // this.$.ajax.generateRequest();
-        alert(this.pythonCode);
+        this.$.ajax.body = JSON.stringify({"code": this.pythonCode, "notebook_name": this.notebookName});
+        this.$.ajax.url = window.location.origin + "/disco/code";
+        this.$.ajax.generateRequest();
       },
       codeSentResponse: function(e) {
         alert(e.detail.response);

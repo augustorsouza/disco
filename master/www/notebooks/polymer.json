@@ -3,6 +3,6 @@
   "shell": "src/disco-notebook.html",
   "fragments": [
     "src/applications.html",
-    "src/applications-reports.html"
+    "src/notebooks-reports.html"
   ]
 }
