@@ -243,6 +243,7 @@ if __name__ == '__main__':
     monitor.start()
 
     for _ in itertools.repeat(None, NUMBER_OF_SUBMISSIONS):
+        print("**** INITIATED A RUN ****")
         jobA = Job("JobA").run(input=[URL] * NUMBER_OF_MAPPERS,
                         map=mapA,
                         reduce=reduceA,
@@ -254,6 +255,7 @@ if __name__ == '__main__':
                         map_reader=map_reader)
         jobB.wait()
         jobA.wait()
+        print("**** FINISHED A RUN ****")
 
     # send an event to the monitor to tell it must stop now
     event.set()`

@@ -3,6 +3,7 @@
 <link rel="import" href="../bower_components/vaadin-grid/vaadin-grid.html">
 <link rel="import" href="../bower_components/paper-dialog/paper-dialog.html">
 <link rel="import" href="../bower_components/paper-dialog-scrollable/paper-dialog-scrollable.html">
+<link rel="import" href="../bower_components/chart-elements/chart-line.html">
 
 <dom-module id="notebooks-reports">
 
@@ -28,6 +29,7 @@
       }
       #dialog {
         height: 100vh;
+        width: 60vw;
         margin-bottom: 10vh;
       }
       #dialog-scrollable {
@@ -37,15 +39,21 @@
       #dialog-scrollable p {
         margin-bottom: 10vh;
       }
+      chart-line {
+        width: 50vw;
+        height: 100vh;
+      }
     </style>
 
     <div id="content">
       <paper-dialog id="dialog" horizontal-align="left" vertical-align="top">
         <h2>Reports for [[selectedFileName]]</h2>
         <paper-dialog-scrollable id="dialog-scrollable">
-          <p>
-            [[dialogContent]]
-          </p>
+
+          <template is="dom-repeat" items="[[chartData]]">
+            <chart-line data="[[item]]"></chart-line>
+          </template>
+
         </paper-dialog-scrollable>
       </paper-dialog>
 
@@ -78,14 +86,14 @@
     Polymer({
       is: 'notebooks-reports',
       properties: {
-        dialogContent: {
-          type: String
-        },
         fileContentsPage: {
           type: Number
         },
         selectedFileName: {
           type: String
+        },
+        chartData: {
+          type: Object
         }
       },
       ready: function() {
@@ -108,7 +116,7 @@
         var contents = json.contents;
         var isLastPage = json.isLastPage;
 
-        this.dialogContent = this.dialogContent + contents;
+        this.parseData();
         this.fileContentsPage = this.fileContentsPage + 1;
 
         if (!isLastPage) {
@@ -117,6 +125,62 @@
           this.openDialog();
           this.$.grid.selection.clear();
         }
+      },
+      parseData: function() {
+        this.chartData = [{
+          labels: ["January", "February", "March", "April", "May", "June", "July"],
+          datasets: [
+            {
+              label: "My First dataset",
+              backgroundColor: "rgba(220,220,220,0.2)",
+              borderColor: "rgba(220,220,220,1)",
+              borderWidth: 1,
+              pointBackgroundColor: "rgba(220,220,220,1)",
+              pointBorderColor: "#fff",
+              pointHoverBackgroundColor: "#fff",
+              pointHoverBorderColor: "rgba(220,220,220,1)",
+              data: [65, 59, 80, 81, 56, 55, 40]
+            },
+            {
+              label: "My Second dataset",
+              backgroundColor: "rgba(151,187,205,0.2)",
+              borderColor: "rgba(151,187,205,1)",
+              borderWidth: 1,
+              pointBackgroundColor: "rgba(151,187,205,1)",
+              pointBorderColor: "#fff",
+              pointHighlightFill: "#fff",
+              pointHoverBorderColor: "rgba(151,187,205,1)",
+              data: [28, 48, 40, 19, 86, 27, 90]
+            }
+          ]
+        },
+        {
+          labels: ["January", "February", "March", "April", "May", "June", "July"],
+          datasets: [
+            {
+              label: "My First dataset",
+              backgroundColor: "rgba(220,220,220,0.2)",
+              borderColor: "rgba(220,220,220,1)",
+              borderWidth: 1,
+              pointBackgroundColor: "rgba(220,220,220,1)",
+              pointBorderColor: "#fff",
+              pointHoverBackgroundColor: "#fff",
+              pointHoverBorderColor: "rgba(220,220,220,1)",
+              data: [65, 59, 80, 81, 56, 55, 40]
+            },
+            {
+              label: "My Second dataset",
+              backgroundColor: "rgba(151,187,205,0.2)",
+              borderColor: "rgba(151,187,205,1)",
+              borderWidth: 1,
+              pointBackgroundColor: "rgba(151,187,205,1)",
+              pointBorderColor: "#fff",
+              pointHighlightFill: "#fff",
+              pointHoverBorderColor: "rgba(151,187,205,1)",
+              data: [28, 48, 40, 19, 86, 27, 90]
+            }
+          ]
+        }];
       },
       openDialog: function(e) {
         this.$.dialog.positionTarget = this.$.content;
@@ -127,7 +191,6 @@
         if (selectedFileIndex != undefined) {
           this.selectedFileName = this.$.grid.items[selectedFileIndex].fileName;
           this.fileContentsPage = 1;
-          this.dialogContent = "";
           this.$.fileContentsAjax.url = window.location.origin + "/disco/code/" + this.selectedFileName + "?page=" + this.fileContentsPage;
         }
       }
