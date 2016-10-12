@@ -27,9 +27,9 @@ op('GET', "/disco/code/" ++ LogFileName, Req) ->
     Offset = PerPage * (Page - 1) + 1,
     DataStr = binary_to_list(Data),
     Tokens = string:tokens(DataStr, "\n"),
-    Sublist = lists:sublist(Tokens, Offset, PerPage),
+    Sublist = lists:map(fun(X) -> list_to_binary(X) end, lists:sublist(Tokens, Offset, PerPage)),
     IsLastPage = Offset + PerPage >= length(Tokens),
-    reply({ok, [{contents, list_to_binary(Sublist)}, {isLastPage, IsLastPage}]}, Req);
+    reply({ok, [{contents, Sublist}, {isLastPage, IsLastPage}]}, Req);
 
 op('GET', "/disco/version", Req) ->
     {ok, Vsn} = application:get_key(vsn),

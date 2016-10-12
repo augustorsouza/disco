@@ -50,7 +50,7 @@
         <h2>Reports for [[selectedFileName]]</h2>
         <paper-dialog-scrollable id="dialog-scrollable">
 
-          <template is="dom-repeat" items="[[chartData]]">
+          <template is="dom-repeat" items="[[chartDataFinal]]">
             <chart-line data="[[item]]"></chart-line>
           </template>
 
@@ -82,6 +82,13 @@
   </template>
 
   <script>
+    var InitiatedRunMarker = "**** INITIATED A RUN ****";
+    var FinishedRunMarker = "**** FINISHED A RUN ****";
+    var Colors = [
+      { opacityOn: "rgba(220,220,220,0.2)", opacityOff: "rgba(220,220,220,1)" },
+      { opacityOn: "rgba(151,187,205,0.2)", opacityOff: "rgba(151,187,205,1)" }
+    ];
+    var ColorIdx = 0;
 
     Polymer({
       is: 'notebooks-reports',
@@ -93,6 +100,9 @@
           type: String
         },
         chartData: {
+          type: Object
+        },
+        chartDataFinal: {
           type: Object
         }
       },
@@ -116,71 +126,149 @@
         var contents = json.contents;
         var isLastPage = json.isLastPage;
 
-        this.parseData();
+        this.parseData(contents);
         this.fileContentsPage = this.fileContentsPage + 1;
 
         if (!isLastPage) {
           this.$.fileContentsAjax.url = window.location.origin + "/disco/code/" + this.selectedFileName + "?page=" + this.fileContentsPage;
         } else {
+          this.chartDataFinal = this.chartData;
           this.openDialog();
           this.$.grid.selection.clear();
         }
       },
-      parseData: function() {
-        this.chartData = [{
-          labels: ["January", "February", "March", "April", "May", "June", "July"],
-          datasets: [
-            {
-              label: "My First dataset",
-              backgroundColor: "rgba(220,220,220,0.2)",
-              borderColor: "rgba(220,220,220,1)",
-              borderWidth: 1,
-              pointBackgroundColor: "rgba(220,220,220,1)",
-              pointBorderColor: "#fff",
-              pointHoverBackgroundColor: "#fff",
-              pointHoverBorderColor: "rgba(220,220,220,1)",
-              data: [65, 59, 80, 81, 56, 55, 40]
-            },
-            {
-              label: "My Second dataset",
-              backgroundColor: "rgba(151,187,205,0.2)",
-              borderColor: "rgba(151,187,205,1)",
-              borderWidth: 1,
-              pointBackgroundColor: "rgba(151,187,205,1)",
-              pointBorderColor: "#fff",
-              pointHighlightFill: "#fff",
-              pointHoverBorderColor: "rgba(151,187,205,1)",
-              data: [28, 48, 40, 19, 86, 27, 90]
+      parseData: function(contents) {
+        for (var i = 0; i < contents.length; i++) {
+          // line is like ('13:37:40.132556', ' ', u'JobA@5c4:46dd4:1c664', ' ', 0)
+          var line = contents[i];
+
+          if (line == InitiatedRunMarker) {
+            this.chartData.push({labels: [], datasets: []});
+          } else if (line == FinishedRunMarker) {
+            // complement the chartData datasets with zeros
+            var labelsQuantity = this.chartData[this.chartData.length - 1].labels.length;
+            for (var j = 0; j < this.chartData.length; j++) {
+              var chart = this.chartData[j];
+              for (var k = 0; k < chart.datasets.length; k++) {
+                var dataset = chart.datasets[k];
+                for (var l = dataset.data.length; l < labelsQuantity; l++) {
+                  dataset.data.push(0);
+                }
+              }
             }
-          ]
-        },
-        {
-          labels: ["January", "February", "March", "April", "May", "June", "July"],
-          datasets: [
-            {
-              label: "My First dataset",
-              backgroundColor: "rgba(220,220,220,0.2)",
-              borderColor: "rgba(220,220,220,1)",
-              borderWidth: 1,
-              pointBackgroundColor: "rgba(220,220,220,1)",
-              pointBorderColor: "#fff",
-              pointHoverBackgroundColor: "#fff",
-              pointHoverBorderColor: "rgba(220,220,220,1)",
-              data: [65, 59, 80, 81, 56, 55, 40]
-            },
-            {
-              label: "My Second dataset",
-              backgroundColor: "rgba(151,187,205,0.2)",
-              borderColor: "rgba(151,187,205,1)",
-              borderWidth: 1,
-              pointBackgroundColor: "rgba(151,187,205,1)",
-              pointBorderColor: "#fff",
-              pointHighlightFill: "#fff",
-              pointHoverBorderColor: "rgba(151,187,205,1)",
-              data: [28, 48, 40, 19, 86, 27, 90]
+          } else {
+            // turn line into something like ["13:37:40.132556", "", "JobA@5c4:46dd4:1c664", "", "0"]
+            line = line.replace(/u\'|\'|\(|\)|\s/g, "").split(",")
+
+            var time = line[0].split(".")[0];  // => "13:37:40"
+            var jobName = line[2];             // => "JobA@5c4:46dd4:1c664"
+            var nodes = parseInt(line[4]);     // => 0
+
+            var lastChartData = this.chartData[this.chartData.length - 1];
+
+            // find or create a label entry
+            if (lastChartData.labels.length > 0) {
+              var lastLabel = lastChartData.labels[lastChartData.labels.length - 1];
+              if (lastLabel != time) {
+                lastChartData.labels.push(time);
+              }
+            } else {
+              lastChartData.labels.push(time);
             }
-          ]
-        }];
+
+            // find or create a dataset entry
+            var dataset = null;
+            for (var j = 0; j < lastChartData.datasets.length; j++) {
+              var d = lastChartData.datasets[j];
+              if (d.label == jobName) {
+                dataset = d;
+                break;
+              }
+            }
+            if (dataset == null) {
+              var color = Colors[ColorIdx];
+              ColorIdx = (ColorIdx + 1) % Colors.length;
+
+              // initialize the data to have zeros for the moment the job wasn't running yet.
+              var data = [];
+              for (var k = 0; k < lastChartData.labels.length - 1; k++) {
+                data.push(0);
+              }
+              data.push(nodes);
+
+              dataset = {
+                label: jobName,
+                backgroundColor: color.opacityOn,
+                borderColor: color.opacityOff,
+                borderWidth: 1,
+                pointBackgroundColor: color.opacityOff,
+                pointBorderColor: "#fff",
+                pointHoverBackgroundColor: "#fff",
+                pointHoverBorderColor: color.opacityOff,
+                data: data
+              };
+
+              lastChartData.datasets.push(dataset);
+            } else {
+              dataset.data.push(nodes);
+            }
+
+          }
+        }
+        // this.chartData = [{
+        //   labels: ["January", "February", "March", "April", "May", "June", "July"],
+        //   datasets: [
+        //     {
+        //       label: "My First dataset",
+        //       backgroundColor: "rgba(220,220,220,0.2)",
+        //       borderColor: "rgba(220,220,220,1)",
+        //       borderWidth: 1,
+        //       pointBackgroundColor: "rgba(220,220,220,1)",
+        //       pointBorderColor: "#fff",
+        //       pointHoverBackgroundColor: "#fff",
+        //       pointHoverBorderColor: "rgba(220,220,220,1)",
+        //       data: [65, 59, 80, 81, 56, 55, 40]
+        //     },
+        //     {
+        //       label: "My Second dataset",
+        //       backgroundColor: "rgba(151,187,205,0.2)",
+        //       borderColor: "rgba(151,187,205,1)",
+        //       borderWidth: 1,
+        //       pointBackgroundColor: "rgba(151,187,205,1)",
+        //       pointBorderColor: "#fff",
+        //       pointHighlightFill: "#fff",
+        //       pointHoverBorderColor: "rgba(151,187,205,1)",
+        //       data: [28, 48, 40, 19, 86, 27, 90]
+        //     }
+        //   ]
+        // },
+        // {
+        //   labels: ["January", "February", "March", "April", "May", "June", "July"],
+        //   datasets: [
+        //     {
+        //       label: "My First dataset",
+        //       backgroundColor: "rgba(220,220,220,0.2)",
+        //       borderColor: "rgba(220,220,220,1)",
+        //       borderWidth: 1,
+        //       pointBackgroundColor: "rgba(220,220,220,1)",
+        //       pointBorderColor: "#fff",
+        //       pointHoverBackgroundColor: "#fff",
+        //       pointHoverBorderColor: "rgba(220,220,220,1)",
+        //       data: [65, 59, 80, 81, 56, 55, 40]
+        //     },
+        //     {
+        //       label: "My Second dataset",
+        //       backgroundColor: "rgba(151,187,205,0.2)",
+        //       borderColor: "rgba(151,187,205,1)",
+        //       borderWidth: 1,
+        //       pointBackgroundColor: "rgba(151,187,205,1)",
+        //       pointBorderColor: "#fff",
+        //       pointHighlightFill: "#fff",
+        //       pointHoverBorderColor: "rgba(151,187,205,1)",
+        //       data: [28, 48, 40, 19, 86, 27, 90]
+        //     }
+        //   ]
+        // }];
       },
       openDialog: function(e) {
         this.$.dialog.positionTarget = this.$.content;
@@ -191,6 +279,7 @@
         if (selectedFileIndex != undefined) {
           this.selectedFileName = this.$.grid.items[selectedFileIndex].fileName;
           this.fileContentsPage = 1;
+          this.chartData = [];
           this.$.fileContentsAjax.url = window.location.origin + "/disco/code/" + this.selectedFileName + "?page=" + this.fileContentsPage;
         }
       }
